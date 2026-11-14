@@ -1,0 +1,46 @@
+{
+  "author": "TECHDEV",
+  "bin": {
+    "spendgate": "./dist/cli.js"
+  },
+  "description": "A local pre-execution spend gate for paying agents: policy file, dry-run verdicts, and a hash-chained receipt ledger for x402 payments.",
+  "devDependencies": {
+    "@eslint/js": "^10.0.1",
+    "@types/node": "^22.20.5",
+    "eslint": "^10.15.0",
+    "globals": "^16.5.0",
+    "prettier": "^3.10.1",
+    "typescript": "^5.9.3",
+    "typescript-eslint": "^8.72.2"
+  },
+  "engines": {
+    "node": ">=20"
+  },
+  "keywords": [
+    "cli",
+    "x402",
+    "ai-agents",
+    "spending-limits",
+    "policy",
+    "audit",
+    "usdc",
+    "devtools",
+    "typescript"
+  ],
+  "license": "MIT",
+  "name": "spendgate",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/techdevfun/spendgate.git"
+  },
+  "scripts": {
+    "bench": "node scripts/bench.js",
+    "build": "tsc",
+    "preflight": "node scripts/preflight.js",
+    "test": "npm run build && node --test test/unit.test.js test/e2e.test.js",
+    "lint": "eslint . && prettier --check \"src/**/*.ts\" \"test/**/*.js\" \"scripts/**/*.js\" \"eslint.config.js\"",
+    "format": "prettier --write \"src/**/*.ts\" \"test/**/*.js\" \"scripts/**/*.js\" \"eslint.config.js\""
+  },
+  "type": "module",
+  "version": "0.1.0"
+}

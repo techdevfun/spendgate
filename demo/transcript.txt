@@ -1,0 +1,93 @@
+# spendgate demo - real CLI output on the SYNTHETIC Brave fixture
+# (payee 0xb1a9e... is invented; amount 5000 base units USDC =
+#  $0.005 on eip155:8453; per-day cap $2.50. Today is pinned to
+#  2026-11-14 so the cap accounting is reproducible.)
+
+$ spendgate init
+created /tmp/spendgate-demo/work/spendgate.json
+created /tmp/spendgate-demo/work/spendgate-ledger.jsonl (empty)
+
+Sample policy: per-call max $1.00, per-day cap $2.50, require-approval
+above $0.25. The allowlist payee is a placeholder
+(0x0000000000000000000000000000000000000000) and the denylist payee is a placeholder
+(0x1111111111111111111111111111111111111111) - replace both with real vendor addresses.
+
+Next steps:
+1. Edit spendgate.json: replace the placeholder allowlist payee with
+   your real vendor wallet address(es), and set caps for your budget.
+2. Dry-run a payment: spendgate simulate --file examples/brave-402.json
+3. Record real decisions: spendgate record --file examples/brave-402.json
+4. Gate CI on it: spendgate check  (exit 1 on any violation)
+
+# the demo policy is the init sample with the fixture payee
+# swapped into the allowlist and a denylist payee added:
+policy: allowlist payee set to the fixture payee
+policy: denylist payee set to 0xdead...0001
+
+$ spendgate simulate --file ../brave-402.json
+verdict: ALLOW
+amount: $0.005 USDC (5000 base units, eip155:8453)
+payee: 0xb1a9e00000000000000000000000000000000001
+vendor: brave-search
+tool: search
+host: search.agent.s.brave.app
+date: 2026-11-14
+reasons:
+  - within per-call max $1.00; day total after payment $0.01 / $2.50
+
+$ spendgate simulate --file ../brave-402.json --payee 0xb1a9e00000000000000000000000000000000002   # lookalike
+verdict: REVIEW
+amount: $0.005 USDC (5000 base units, eip155:8453)
+payee: 0xb1a9e00000000000000000000000000000000002
+vendor: brave-search
+tool: search
+host: search.agent.s.brave.app
+date: 2026-11-14
+reasons:
+  - payee 0xb1a9e00000000000000000000000000000000002 looks like allowlisted 0xb1a9e00000000000000000000000000000000001 (edit distance 1) - confirm the address before paying
+exit: 3
+
+$ spendgate simulate --file ../brave-402.json --payee 0xdead000000000000000000000000000000000001   # denylist
+verdict: DENY
+amount: $0.005 USDC (5000 base units, eip155:8453)
+payee: 0xdead000000000000000000000000000000000001
+vendor: brave-search
+tool: search
+host: search.agent.s.brave.app
+date: 2026-11-14
+reasons:
+  - payee 0xdead000000000000000000000000000000000001 is on the denylist
+exit: 1
+
+$ for i in $(seq 1 500); do spendgate record --file ../brave-402.json > /dev/null; done
+500 payments recorded (each $0.005, ledger total $2.50)
+
+$ spendgate simulate --file ../brave-402.json   # the 501st identical payment
+verdict: DENY
+amount: $0.005 USDC (5000 base units, eip155:8453)
+payee: 0xb1a9e00000000000000000000000000000000001
+vendor: brave-search
+tool: search
+host: search.agent.s.brave.app
+date: 2026-11-14
+reasons:
+  - per-day cap $2.50 would be exceeded ($2.50 spent + $0.005 = $2.51)
+  - per-vendor cap for brave-search ($2.50) would be exceeded ($2.50 spent + $0.005 = $2.51)
+  - per-tool cap for search ($2.50) would be exceeded ($2.50 spent + $0.005 = $2.51)
+exit: 1
+
+$ spendgate report
+spend report (500 ledger entries; 500 ALLOW, 0 DENY, 0 REVIEW)
+total spent (ALLOW only): $2.50 across 500 payments
+
+by vendor:
+  brave-search  $2.50
+
+by tool:
+  search   $2.50
+
+by day:
+  2026-11-14  $2.50
+
+$ spendgate check
+check OK: 500 ledger entries, hash chain intact, no policy violations
