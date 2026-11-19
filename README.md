@@ -20,6 +20,10 @@ is **$1 per payment** (set 18/08/2026 after a V12 audit published
 22/10/2026 found the default client had no spending limit at all).
 A $1 per-call cap does not stop an agent loop that makes 500 valid $0.005
 payments. That loop costs $2.50 and nothing in the default stack objects.
+That loop is a constructed illustration, not a reported incident: the $1
+cap and the audit finding behind it are real, and the 500-payment
+arithmetic uses Brave's published $0.005/search price to show why a
+per-call cap cannot bound cumulative spend.
 A survey of 12 agent frameworks (09/10/2026) found **0 of 12** can cap what
 an agent spends in dollars on tool calls.
 
