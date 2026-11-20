@@ -22,6 +22,13 @@ export interface LedgerEntry {
   tool: string;
   host: string;
   reasons: string[];
+  /**
+   * SHA-256 of the policy in force when the decision was recorded
+   * (see hashPolicy in policy.ts). Optional: entries written before
+   * this field existed have no hash, and they still verify - the field
+   * only pins the policy version, it is not part of the chain itself.
+   */
+  policyHash?: string;
   prevHash: string;
   hash: string;
 }
@@ -30,7 +37,7 @@ export const GENESIS_PREV_HASH = "0".repeat(64);
 
 /** Canonical JSON: fixed key order, so the hash is reproducible. */
 export function canonicalEntry(entry: Omit<LedgerEntry, "hash">): string {
-  const ordered = {
+  const ordered: Record<string, unknown> = {
     seq: entry.seq,
     ts: entry.ts,
     date: entry.date,
@@ -41,8 +48,13 @@ export function canonicalEntry(entry: Omit<LedgerEntry, "hash">): string {
     tool: entry.tool,
     host: entry.host,
     reasons: entry.reasons,
-    prevHash: entry.prevHash,
   };
+  // Only present when the entry was recorded with a policy hash, so
+  // pre-policyHash entries keep their original hash and still verify.
+  if (entry.policyHash !== undefined) {
+    ordered.policyHash = entry.policyHash;
+  }
+  ordered.prevHash = entry.prevHash;
   return JSON.stringify(ordered);
 }
 
@@ -77,6 +89,7 @@ export function loadLedger(path: string): LedgerEntry[] {
       typeof e.tool !== "string" ||
       typeof e.host !== "string" ||
       !Array.isArray(e.reasons) ||
+      (e.policyHash !== undefined && typeof e.policyHash !== "string") ||
       typeof e.prevHash !== "string" ||
       typeof e.hash !== "string"
     ) {
@@ -133,6 +146,7 @@ export function appendEntry(
     tool: partial.tool,
     host: partial.host,
     reasons: partial.reasons,
+    policyHash: partial.policyHash,
     prevHash,
   };
   const entry: LedgerEntry = { ...withoutHash, hash: hashEntry(withoutHash) };
