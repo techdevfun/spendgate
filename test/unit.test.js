@@ -15,7 +15,7 @@ import {
 import { findLookalike, levenshtein } from "../dist/lookalike.js";
 import { formatUsd, formatUsdExact, isValidDate, usdToMicro } from "../dist/money.js";
 import { parseBaseUnits, parsePaymentFile } from "../dist/parse402.js";
-import { parsePolicy, samplePolicy } from "../dist/policy.js";
+import { parsePolicy, samplePolicy, hashPolicy } from "../dist/policy.js";
 import { buildReport } from "../dist/report.js";
 import { evaluate } from "../dist/verdict.js";
 import { mkdtempSync, writeFileSync } from "node:fs";
@@ -261,6 +261,59 @@ describe("ledger hash chain", () => {
     writeFileSync(path, `${lines[1]}\n`, "utf8");
     const problems = verifyChain(loadLedger(path));
     assert.ok(problems.some((p) => /seq is 2, expected 1/.test(p)));
+  });
+});
+
+describe("policy hash", () => {
+  it("is stable for the same rules and changes when a cap changes", () => {
+    const a = hashPolicy(parsePolicy(samplePolicy()));
+    const b = hashPolicy(parsePolicy(samplePolicy()));
+    assert.equal(a, b);
+    assert.equal(a.length, 64);
+    const changed = samplePolicy();
+    changed.limits.perDayMaxUsd = 100;
+    assert.notEqual(hashPolicy(parsePolicy(changed)), a);
+  });
+  it("appendEntry records the policy hash and the chain still verifies", () => {
+    const dir = mkdtempSync(join(tmpdir(), "sg-hash-"));
+    const path = join(dir, "ledger.jsonl");
+    writeFileSync(path, "", "utf8");
+    const policyHash = hashPolicy(parsePolicy(samplePolicy()));
+    const entry = appendEntry(path, {
+      ts: "2026-11-14T12:00:00.000Z",
+      date: "2026-11-14",
+      verdict: "ALLOW",
+      amountUsd: 0.005,
+      payee: FIXTURE_PAYEE,
+      vendor: "brave-search",
+      tool: "search",
+      host: "search.agent.s.brave.app",
+      reasons: ["within per-call max $1.00"],
+      policyHash,
+    });
+    assert.equal(entry.policyHash, policyHash);
+    assert.equal(entry.hash, hashEntry(entry));
+    assert.deepEqual(verifyChain(loadLedger(path)), []);
+  });
+  it("entries written before policyHash existed still load and verify", () => {
+    const dir = mkdtempSync(join(tmpdir(), "sg-hash-"));
+    const path = join(dir, "ledger.jsonl");
+    writeFileSync(path, "", "utf8");
+    const entry = appendEntry(path, {
+      ts: "2026-11-14T12:00:00.000Z",
+      date: "2026-11-14",
+      verdict: "ALLOW",
+      amountUsd: 0.005,
+      payee: FIXTURE_PAYEE,
+      vendor: "brave-search",
+      tool: "search",
+      host: "search.agent.s.brave.app",
+      reasons: ["within per-call max $1.00"],
+    });
+    assert.equal(entry.policyHash, undefined);
+    const loaded = loadLedger(path);
+    assert.equal(loaded[0].policyHash, undefined);
+    assert.deepEqual(verifyChain(loaded), []);
   });
 });
 
