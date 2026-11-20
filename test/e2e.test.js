@@ -143,6 +143,20 @@ describe("record + check + report", () => {
     assert.equal(r.status, 2);
     assert.match(r.stderr, /cannot read policy/);
   });
+  it("check notes a policy change without failing (exit 0)", () => {
+    const dir = workdirWithPolicy();
+    assert.equal(run(dir, ["record", "--file", FIXTURE]).status, 0);
+    // Raise the per-day cap: the recorded ALLOW still replays ALLOW,
+    // but it was judged under different rules, and check must say so.
+    const policyPath = join(dir, "spendgate.json");
+    const policy = JSON.parse(readFileSync(policyPath, "utf8"));
+    policy.limits.perDayMaxUsd = 100;
+    writeFileSync(policyPath, `${JSON.stringify(policy, null, 2)}\n`, "utf8");
+    const check = run(dir, ["check"]);
+    assert.equal(check.status, 0, check.stdout + check.stderr);
+    assert.match(check.stdout, /check OK/);
+    assert.match(check.stdout, /recorded under a different policy/);
+  });
   it("500 recorded $0.005 payments, then the 501st DENYs (real CLI loop)", () => {
     const dir = workdirWithPolicy();
     for (let i = 0; i < 500; i++) {
