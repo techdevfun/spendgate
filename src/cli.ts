@@ -25,7 +25,7 @@ import {
   type PaymentRequest,
 } from "./money.js";
 import { buildRequestFromFlags, parsePaymentFile } from "./parse402.js";
-import { loadPolicy, type Policy } from "./policy.js";
+import { loadPolicy, hashPolicy, type Policy } from "./policy.js";
 import { buildReport, renderReport } from "./report.js";
 import { evaluate } from "./verdict.js";
 
@@ -292,6 +292,7 @@ function cmdSimulate(flags: Flags, positionals: string[], recordIt: boolean): vo
       tool: built.request.tool,
       host: built.request.host,
       reasons: ev.reasons,
+      policyHash: hashPolicy(policy),
     });
     console.log(renderVerdict(ev, built.request, format, built));
     console.log(`recorded as ledger line ${entry.seq} (hash ${entry.hash.slice(0, 12)}...)`);
@@ -318,6 +319,24 @@ function cmdCheck(flags: Flags, positionals: string[]): void {
     fail(err instanceof Error ? err.message : String(err));
   }
   const violations: string[] = [...verifyChain(entries)];
+  // Policy-hash notes: an entry recorded under a different policy is
+  // NOT a violation - editing the policy is legitimate, and the replay
+  // below already judges old ALLOWs against the current rules. The note
+  // only tells the auditor which entries predate the current policy,
+  // so a replay violation can be traced to a rule change instead of
+  // looking like a bad record. Entries without a hash predate the
+  // feature and are skipped silently.
+  const currentPolicyHash = hashPolicy(policy);
+  const policyNotes: string[] = [];
+  for (const entry of entries) {
+    if (entry.policyHash !== undefined && entry.policyHash !== currentPolicyHash) {
+      policyNotes.push(
+        `line ${entry.seq}: recorded under a different policy ` +
+          `(policy hash ${entry.policyHash.slice(0, 12)}..., current ${currentPolicyHash.slice(0, 12)}...) - ` +
+          `replay below uses the current policy`,
+      );
+    }
+  }
   // Replay every ALLOW entry against the policy, using only the entries
   // recorded before it (cumulative caps are order-dependent).
   for (let i = 0; i < entries.length; i++) {
@@ -344,10 +363,12 @@ function cmdCheck(flags: Flags, positionals: string[]): void {
       `check OK: ${entries.length} ledger ${entries.length === 1 ? "entry" : "entries"}, ` +
         `hash chain intact, no policy violations`,
     );
+    for (const n of policyNotes) console.log(`  note: ${n}`);
     process.exit(0);
   }
   console.log(`check FAILED: ${violations.length} violation(s) in ${ledgerPath}`);
   for (const v of violations) console.log(`  - ${v}`);
+  for (const n of policyNotes) console.log(`  note: ${n}`);
   process.exit(1);
 }
 
