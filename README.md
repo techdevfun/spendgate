@@ -192,8 +192,11 @@ maps (a vendor or tool with no entry has no cap of that kind).
 
 One JSON object per line, append-only. Each line carries `seq`, `ts`,
 `date`, `verdict`, `amountUsd`, `payee`, `vendor`, `tool`, `host`,
-`reasons`, `prevHash`, and `hash` (SHA-256 of the canonical JSON of the
-line without its own `hash`). The genesis `prevHash` is 64 zeroes.
+`reasons`, `policyHash`, `prevHash`, and `hash` (SHA-256 of the canonical JSON of the
+line without its own `hash`). `policyHash` is the SHA-256 of the policy
+in force when the decision was recorded, so an auditor can tell which
+rules applied; entries written before this field existed have no hash
+and still verify. The genesis `prevHash` is 64 zeroes.
 Editing, deleting, or reordering a line breaks the chain, and `check`
 reports it:
 
@@ -230,6 +233,22 @@ Read this before trusting spendgate with real money:
   percentage saved. Any such number would be invented.
 - **It is not a wallet, custodian, or payment processor.** It reads a
   payment request and writes a receipt. That is all.
+
+## Open design questions
+
+Three questions the first real discussion on this repo raised
+(issue #1), written up in `docs/open-design-questions.md`:
+
+- **Chain anchoring is unsolved.** A hash chain only proves
+  "not rewritten" against a chain head the verifier trusts, and
+  spendgate does not anchor the head anywhere yet.
+- **Policy versioning is now pinned.** Each ledger entry carries the
+  hash of the policy in force when it was recorded, and `check` notes
+  entries recorded under a different policy.
+- **Crash consistency under simultaneous approvals is not solved.**
+  Two concurrent `record` calls can append conflicting lines, and a
+  crash mid-append can leave a torn last line. Sequential use is
+  unaffected; concurrent use needs a locking design first.
 
 ## Examples
 
