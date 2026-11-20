@@ -7,6 +7,7 @@
  * the field is optional (caps and lists are required - a silent default
  * cap would be worse than an error).
  */
+import { createHash } from "node:crypto";
 import { readFileSync } from "node:fs";
 import { isAddress, normaliseAddress, usdToMicro } from "./money.js";
 
@@ -184,6 +185,19 @@ export function loadPolicy(path: string): Policy {
     throw new Error(`policy file "${path}" is not valid JSON`);
   }
   return parsePolicy(raw);
+}
+
+/**
+ * SHA-256 of the canonical JSON of a parsed policy. `record` stamps every
+ * ledger entry with this hash, so an auditor can tell which policy version
+ * was in force when each decision was made. The hash is stable: parsePolicy
+ * rebuilds the policy object in a fixed key order, so the same rules always
+ * hash the same way, and any rule change (cap, list, threshold) changes
+ * the hash. It is a fingerprint, not a signature - it proves which policy
+ * was used, not who approved it.
+ */
+export function hashPolicy(policy: Policy): string {
+  return createHash("sha256").update(JSON.stringify(policy)).digest("hex");
 }
 
 /** Per-call / per-day / per-vendor / per-tool caps in micro-dollars. */
